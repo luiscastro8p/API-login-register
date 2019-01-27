@@ -4,6 +4,7 @@ var ObjectID = mongodb.ObjectID;
 var crypto = require('crypto');
 var express = require('express');
 var bodyParser = require('body-parser');
+const jwt = require('jsonwebtoken');
 
 
 
@@ -46,6 +47,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 
 
+
+
+
+
 //create MongoDB client
 var MongoClient = mongodb.MongoClient;
 
@@ -56,6 +61,67 @@ MongoClient.connect(url, { useNewUrlParser: true }, function(err, client) {
     if (err)
         console.log('Unable to connect to the mongo server error', err);
     else {
+
+
+        app.get('/api', (req, res) => {
+            res.json({
+                message: 'Welcome to the API'
+            });
+        });
+
+        app.post('/api/posts', verifyToken, (req, res) => {
+            jwt.verify(req.token, 'secretkey', (err, authData) => {
+                if (err) {
+                    res.sendStatus(403);
+                } else {
+                    res.json({
+                        message: 'Post created...',
+                        authData
+                    });
+                }
+            });
+        });
+
+        app.post('/api/login', (req, res) => {
+            // Mock user
+            const user = {
+                id: 1,
+                username: 'brad',
+                email: 'brad@gmail.com'
+            }
+
+            jwt.sign({ user }, 'secretkey', { expiresIn: '30s' }, (err, token) => {
+                res.json({
+                    token
+                });
+            });
+        });
+
+        // FORMAT OF TOKEN
+        // Authorization: Bearer <access_token>
+
+        // Verify Token
+        function verifyToken(req, res, next) {
+            // Get auth header value
+            const bearerHeader = req.headers['authorization'];
+            // Check if bearer is undefined
+            if (typeof bearerHeader !== 'undefined') {
+                // Split at the space
+                const bearer = bearerHeader.split(' ');
+                // Get token from array
+                const bearerToken = bearer[1];
+                // Set the token
+                req.token = bearerToken;
+                // Next middleware
+                next();
+            } else {
+                // Forbidden
+                res.sendStatus(403);
+            }
+
+        }
+
+
 
         //registrer
         app.post('/register', (request, response, next) => {
@@ -77,6 +143,7 @@ MongoClient.connect(url, { useNewUrlParser: true }, function(err, client) {
                 'name': name
             };
             var db = client.db('nombresenclave');
+
 
             //check exists email 
             db.collection('user')
@@ -103,33 +170,43 @@ MongoClient.connect(url, { useNewUrlParser: true }, function(err, client) {
 
         app.post('/login', (request, response, next) => {
             var post_data = request.body;
-
             var userPassword = post_data.password;
             var email = post_data.email;
-
-
             var db = client.db('nombresenclave');
 
             //check exists email 
             db.collection('user')
                 .find({ 'email': email }).count(function(err, number) {
+
+
                     if (number == 0) {
                         response.json('Email NOT exists');
                         console.log('Email NOT exists');
+
+
                     } else {
                         //insert data
                         db.collection('user')
                             .findOne({ 'email': email }, function(err, user) {
+
+                                jwt.sign({ user }, 'secretkey', (err, token) => {
+                                    res.json({
+                                        token
+                                    });
+
+                                });
+
                                 var salt = user.salt;
                                 var Hashed_password = checkHashPassword(userPassword, salt).passwordHash; //hash pasword with salt
                                 var encrypted_password = user.password; //get password from user
                                 if (Hashed_password == encrypted_password) {
                                     response.json('login success');
                                     console.log('login success');
+                                    //token
 
                                 } else {
                                     response.json('Wrong password');
-                                    console.log('login password');
+                                    console.log('Wrong password');
                                 }
 
 
